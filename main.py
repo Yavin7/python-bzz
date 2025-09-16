@@ -59,15 +59,15 @@ class BZZCompressor:
             print(f"Len Table: {len_table}")
             print(f"Num Flags: {num_flags.tobytes()}")
 
+            # Adding 0x100 here means the bitarray is a length of 9, and the first item is always 1
+            # This means that later, when we need to gather more flag bits, we aren't losing any data, or
+            # hitting an index out of bounds error
             flag_bits = bitarray(bin(int(data[0:8].to01(), 2) + 0x100)[2:])
             del data[0:8]
 
-            print(f"Starting flag_bits: {flag_bits.tobytes()}")
-            hold_val = b""
+            print(f"Starting flag_bits: {flag_bits}")
 
             while int(num_flags.to01(), 2) > 0:
-                # Any time we reset the flag_bits, it's length is 9 digits. So we shift right and trim.
-                # Otherwise, we just shift right
                 carry = flag_bits[-1]
                 flag_bits = flag_bits >> 1
 
@@ -77,11 +77,14 @@ class BZZCompressor:
                 print(f"Carry: {carry}")
                 print(f"Flag Bits: {flag_bits}")
 
-                if int(flag_bits.to01(), 2) == 0:
+                # if we are down to only 0 bits, we are out of file-driven data
+                # Here we collect more flag bits and re-iterate the loop
+                if len(flag_bits.to01()) == 0:
                     flag_bits = bitarray(bin(int(data[0:8].to01(), 2) + 0x100)[2:])
                     del data[0:8]
                     continue
 
+                # Carry means the next byte is raw data, no weird placement or indexing
                 if carry:
                     if len(data) == 0:
                         print("Error processing file. Reached of data stream early.")
@@ -89,11 +92,15 @@ class BZZCompressor:
 
                     output_buffer.append(data[0:8])
                     del data[0:8]
+
+                # If Carry is 0, then we are doing actual decompression. This is the tricky part
                 else:
+                    # This shouldn't happen
                     if len(data) <= 8:
                         print("Error processing file. Reached of data stream early.")
                         return
 
+                    # This is "temp" in our documentation
                     distance_data = data[0:16]
                     del data[0:16]
 
