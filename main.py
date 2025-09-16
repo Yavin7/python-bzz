@@ -136,7 +136,7 @@ class BZZCompressor:
 
                     print(f"Output Buffer Size (in bits): {len(output_buffer)}")
                     print(f"Distance Data: {distance_data.tobytes()}")
-                    print(f"Displacement (in bits): {int(displacement.to01(), 2)}")
+                    print(f"Displacement (in bits): {displacement}")
                     print(f"Length (in bits): {length}")
 
                     # Here we copy bit by bit from earlier in the output buffer.
