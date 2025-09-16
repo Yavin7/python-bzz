@@ -11,7 +11,7 @@ class BZZCompressor:
             with open(input_file_path, "rb") as input_file:
                 data.fromfile(input_file)
         except IOError:
-            print("Could not open input file ...")
+            print("Could not open input file...")
             raise
 
         if len(data) > 9:
@@ -104,31 +104,56 @@ class BZZCompressor:
                     distance_data = data[0:16]
                     del data[0:16]
 
-                    length = len_table[
-                        int(
-                            (
-                                distance_data
-                                & bitarray(bin(int(len_mask.to01(), 2))[2:].zfill(16))
-                            ).to01(),
-                            2,
+                    # length here is the length of the data we are copying.
+                    # We multiply by 8 since we are working with bits instead of bytes
+                    length = (
+                        len_table[
+                            int(
+                                (
+                                    distance_data
+                                    & bitarray(
+                                        bin(int(len_mask.to01(), 2))[2:].zfill(16)
+                                    )
+                                ).to01(),
+                                2,
+                            )
+                        ]
+                        * 8
+                    )
+
+                    # Displacement is how far back in the existing output_buffer we are
+                    # looking to copy from. We multiply by 8 since we are working with bits and not bytes
+                    displacement = (
+                        int((distance_data >> int(len_bits.to01(), 2)).to01(), 2) * 8
+                    )
+
+                    # This shouldn't happen
+                    if displacement <= 0:
+                        print(
+                            "Error processing file. Displacement was less than or equal to 0"
                         )
-                    ]
-
-                    displacement = distance_data >> int(len_bits.to01(), 2)
-
-                    if displacement == 0:
-                        print("Error processing file. Displacement was 0")
                         return
 
-                    print(f"Output Buffer Size: {len(output_buffer)}")
+                    print(f"Output Buffer Size (in bits): {len(output_buffer)}")
                     print(f"Distance Data: {distance_data.tobytes()}")
-                    print(f"Displacement: {int(displacement.to01(), 2)}")
+                    print(f"Displacement (in bits): {int(displacement.to01(), 2)}")
                     print(f"Length: {length}")
 
+                    # Here we copy bit by bit from earlier in the output buffer.
+                    # we use this instead of index slicing since the slice could lead to
+                    # data we are currently copying into the buffer
                     for i in range(length):
-                        output_buffer.append(
-                            output_buffer[-int(displacement.to01(), 2)]
-                        )
+                        out_index = len(output_buffer)
+                        copy_index = out_index - int(displacement.to01(), 2)
+
+                        # This shouldn't happen
+                        if copy_index < 0:
+                            print(
+                                "Error decompressing file. copy_index is out of range"
+                            )
+                            return
+
+                        output_buffer.append(output_buffer[copy_index])
 
                 num_flags = bitarray(bin(int(num_flags.to01(), 2) - 1)[2:].zfill(24))
 
