@@ -5,8 +5,9 @@ A Python library for decompressing and compressing BZZ files that were originall
 This project is VERY work-in-progress
 
 ## Features
+
 It supports the following features:
-- 
+- (uh...)
 
 I hope to add the following:
 - Extract/decompress BZZ files
