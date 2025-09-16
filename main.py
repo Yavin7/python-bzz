@@ -142,7 +142,13 @@ class BZZCompressor:
                     # Here we copy bit by bit from earlier in the output buffer.
                     # we use this instead of index slicing since the slice could lead to
                     # data we are currently copying into the buffer
-                    start_index = len(output_buffer) - int(displacement.to01(), 2)
+                    start_index = len(output_buffer) - displacement
+
+                    # If start index is less than 0, we'll be checking something like output_buffer[-2]
+                    # or smth, which will have an IndexOutOfBounds exception
+                    if start_index < 0:
+                        print("Error decompressing file. Start Index was out of range.")
+                        return
 
                     for i in range(length):
                         output_buffer.append(output_buffer[start_index + i])
