@@ -4,7 +4,7 @@ from bitarray import bitarray
 class BZZCompressor:
     def decompress(self, input_file_path) -> bytes:
         data = bitarray(endian="big")
-        output_buffer = []
+        output_buffer = bitarray(endian="big")
 
         # read the input file
         try:
@@ -137,12 +137,13 @@ class BZZCompressor:
                     print(f"Output Buffer Size (in bits): {len(output_buffer)}")
                     print(f"Distance Data: {distance_data.tobytes()}")
                     print(f"Displacement (in bits): {int(displacement.to01(), 2)}")
-                    print(f"Length: {length}")
+                    print(f"Length (in bits): {length}")
 
                     # Here we copy bit by bit from earlier in the output buffer.
                     # we use this instead of index slicing since the slice could lead to
                     # data we are currently copying into the buffer
                     start_index = len(output_buffer) - int(displacement.to01(), 2)
+
                     for i in range(length):
                         output_buffer.append(output_buffer[start_index + i])
 
@@ -150,17 +151,15 @@ class BZZCompressor:
 
             if len(data) > 0:
                 output_buffer.append(
-                    bitarray(
-                        data.to01() + "0".join("" for i in range(8 - len(data)))
-                    ).tobytes()
+                    bitarray(data.to01() + "0".join("" for i in range(8 - len(data))))
                 )
 
         else:
             # If the file is less than 9 bits, it's just output
-            for i in data.tobytes():
+            for i in data:
                 output_buffer.append(i)
 
-        out_data = b"".join(output_buffer)
+        out_data = b"".join(output_buffer.tobytes())
 
         try:
             if "bin_extract" in input_file_path[0:11]:
