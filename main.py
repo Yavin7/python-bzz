@@ -48,7 +48,7 @@ class BZZCompressor:
                 else:
                     len_table.append(i + 3)
 
-            num_flags = bitarray(data[0:24])
+            num_flags = bitarray(bin(int(data[0:24].to01(), 2) + 1)[2:].zfill(24))
             del data[0:24]
 
             print(f"Method: {method.tobytes()}")
@@ -59,40 +59,71 @@ class BZZCompressor:
             print(f"Len Table: {len_table}")
             print(f"Num Flags: {num_flags.tobytes()}")
 
-            flag_bits = bitarray(bin(int(bitarray(data[0:8]).to01(), 2) + 0x100)[2:])
+            flag_bits = bitarray(bin(int(data[0:8].to01(), 2) + 0x100)[2:])
             del data[0:8]
 
-            print(f"Starting flag_bits: {flag_bits}")
+            print(f"Starting flag_bits: {flag_bits.tobytes()}")
             hold_val = b""
 
-            while len(data) >= 8:
+            while int(num_flags.to01(), 2) > 0:
+                # Any time we reset the flag_bits, it's length is 9 digits. So we shift right and trim.
+                # Otherwise, we just shift right
+                carry = flag_bits[-1]
                 flag_bits = flag_bits >> 1
 
+                if len(flag_bits) > 8 and flag_bits[0] == 0:
+                    flag_bits = flag_bits[1:]
+
+                print(f"Carry: {carry}")
+                print(f"Flag Bits: {flag_bits}")
+
                 if int(flag_bits.to01(), 2) == 0:
-                    flag_bits = bitarray(
-                        bin(int(bitarray(data[0:8]).to01(), 2) + 0x100)[2:]
-                    )
+                    flag_bits = bitarray(bin(int(data[0:8].to01(), 2) + 0x100)[2:])
                     del data[0:8]
-                elif not flag_bits & bitarray(bin(1)[2:].zfill(16)):
-                    output_buffer.append(bitarray(data[0:8]))
-                    del data[0:8]
-                else:
-                    temp = bitarray(data[0:16])
-                    del data[0:16]
+                    continue
 
-                    length = len_table[temp & len_mask]
-                    disp = temp >> len_bits
-
-                    print(disp)
-
-                    if disp == 0:
-                        print("Error processing file")
+                if carry:
+                    if len(data) == 0:
+                        print("Error processing file. Reached of data stream early.")
                         return
 
-                    for i in range(length):
-                        output_buffer.append(disp)
+                    output_buffer.append(data[0:8])
+                    del data[0:8]
+                else:
+                    if len(data) <= 8:
+                        print("Error processing file. Reached of data stream early.")
+                        return
 
-                num_flags = num_flags - 1
+                    distance_data = data[0:16]
+                    del data[0:16]
+
+                    length = len_table[
+                        int(
+                            (
+                                distance_data
+                                & bitarray(bin(int(len_mask.to01(), 2))[2:].zfill(16))
+                            ).to01(),
+                            2,
+                        )
+                    ]
+
+                    displacement = distance_data >> int(len_bits.to01(), 2)
+
+                    if displacement == 0:
+                        print("Error processing file. Displacement was 0")
+                        return
+
+                    print(f"Output Buffer Size: {len(output_buffer)}")
+                    print(f"Distance Data: {distance_data.tobytes()}")
+                    print(f"Displacement: {int(displacement.to01(), 2)}")
+                    print(f"Length: {length}")
+
+                    for i in range(length):
+                        output_buffer.append(
+                            output_buffer[-int(displacement.to01(), 2)]
+                        )
+
+                num_flags = bitarray(bin(int(num_flags.to01(), 2) - 1)[2:].zfill(24))
 
             if len(data) > 0:
                 output_buffer.append(
@@ -103,7 +134,7 @@ class BZZCompressor:
 
         else:
             # If the file is less than 9 bits, it's just output
-            for i in bitarray(data).tobytes():
+            for i in data.tobytes():
                 output_buffer.append(i)
 
         out_data = b"".join(output_buffer)
@@ -120,7 +151,9 @@ class BZZCompressor:
                 output_file_name = output_file_path
 
             # TODO: Create file path, if it doesn't exist
-            with open(f"decompressed_files/{output_file_name}", "wb") as outfile:
+            with open(
+                f"decompressed_files/{output_file_name[:4]}.file", "wb"
+            ) as outfile:
                 outfile.write(out_data)
                 print(f"File {output_file_name} saved successfully!")
         except IOError:
