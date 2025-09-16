@@ -1,0 +1,132 @@
+from bitarray import bitarray
+
+
+class BZZCompressor:
+    def decompress(self, input_file_path) -> bytes:
+        data = bitarray(endian="big")
+        output_buffer = []
+
+        # read the input file
+        try:
+            with open(input_file_path, "rb") as input_file:
+                data.fromfile(input_file)
+        except IOError:
+            print("Could not open input file ...")
+            raise
+
+        if len(data) > 9:
+            # Getting our method, this is likely imprecise, since I'm one dealing with one method type, but it gets what I want
+            method = data[0:8] | bitarray("00001010")
+            # We move on to the next byte in data
+            del data[0:8]
+
+            # Gathering variables based on the method according to https://problemkaputt.de/psxspx-cdrom-file-compression-bzz.htm
+            # Note: bin(int)[2:].zfill(8) converts a number to an 8-bit binary string
+
+            # `>> 3` is the same as dividing by 8
+            shifter = (method >> 3) & bitarray(bin(0x03)[2:].zfill(8))
+            len_bits = (method & bitarray(bin(0x07)[2:].zfill(8))) ^ bitarray(
+                bin(0x07)[2:].zfill(8)
+            )
+
+            # The bin() function only returns the second half of the byte, so we pad the byte
+            len_mask = bitarray(bin((1 << int(len_bits.to01(), 2)) - 1)[2:].zfill(8))
+
+            threshold = len_mask >> 1
+            if int(threshold.to01(), 2) > 0x07:
+                threshold = bitarray(bin(0x13).zfill(8))
+
+            len_table = []
+
+            for i in range(int(len_mask.to01(), 2)):
+                if i > int(threshold.to01(), 2):
+                    len_table.append(
+                        (i - int(threshold.to01(), 2) << int(shifter.to01(), 2))
+                        + int(threshold.to01(), 2)
+                        + 3
+                    )
+                else:
+                    len_table.append(i + 3)
+
+            num_flags = bitarray(data[0:24])
+            del data[0:24]
+
+            print(f"Method: {method.tobytes()}")
+            print(f"Shifter: {shifter.tobytes()}")
+            print(f"Len Bits: {len_bits.tobytes()}")
+            print(f"Len Mask: {len_mask.tobytes()}")
+            print(f"Threshold: {threshold.tobytes()}")
+            print(f"Len Table: {len_table}")
+            print(f"Num Flags: {num_flags.tobytes()}")
+
+            flag_bits = bitarray(bin(int(bitarray(data[0:8]).to01(), 2) + 0x100)[2:])
+            del data[0:8]
+
+            print(f"Starting flag_bits: {flag_bits}")
+            hold_val = b""
+
+            while len(data) >= 8:
+                flag_bits = flag_bits >> 1
+
+                if int(flag_bits.to01(), 2) == 0:
+                    flag_bits = bitarray(
+                        bin(int(bitarray(data[0:8]).to01(), 2) + 0x100)[2:]
+                    )
+                    del data[0:8]
+                elif not flag_bits & bitarray(bin(1)[2:].zfill(16)):
+                    output_buffer.append(bitarray(data[0:8]))
+                    del data[0:8]
+                else:
+                    temp = bitarray(data[0:16])
+                    del data[0:16]
+
+                    length = len_table[temp & len_mask]
+                    disp = temp >> len_bits
+
+                    print(disp)
+
+                    if disp == 0:
+                        print("Error processing file")
+                        return
+
+                    for i in range(length):
+                        output_buffer.append(disp)
+
+                num_flags = num_flags - 1
+
+            if len(data) > 0:
+                output_buffer.append(
+                    bitarray(
+                        data.to01() + "0".join("" for i in range(8 - len(data)))
+                    ).tobytes()
+                )
+
+        else:
+            # If the file is less than 9 bits, it's just output
+            for i in bitarray(data).tobytes():
+                output_buffer.append(i)
+
+        out_data = b"".join(output_buffer)
+
+        try:
+            if "bin_extract" in input_file_path[0:11]:
+                output_file_path = input_file_path[12:]
+            else:
+                output_file_path = input_file_path
+
+            if "/" in output_file_path:
+                output_file_name = output_file_path.split("/")[-1]
+            else:
+                output_file_name = output_file_path
+
+            # TODO: Create file path, if it doesn't exist
+            with open(f"decompressed_files/{output_file_name}", "wb") as outfile:
+                outfile.write(out_data)
+                print(f"File {output_file_name} saved successfully!")
+        except IOError:
+            print(f"Unable to write file for {input_file_path}")
+
+
+compressor = BZZCompressor()
+
+compressor.decompress("bin_extract/level/mc/mccave01.bzz")
