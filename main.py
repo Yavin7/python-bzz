@@ -142,18 +142,9 @@ class BZZCompressor:
                     # Here we copy bit by bit from earlier in the output buffer.
                     # we use this instead of index slicing since the slice could lead to
                     # data we are currently copying into the buffer
+                    start_index = len(output_buffer) - int(displacement.to01(), 2)
                     for i in range(length):
-                        out_index = len(output_buffer)
-                        copy_index = out_index - int(displacement.to01(), 2)
-
-                        # This shouldn't happen
-                        if copy_index < 0:
-                            print(
-                                "Error decompressing file. copy_index is out of range"
-                            )
-                            return
-
-                        output_buffer.append(output_buffer[copy_index])
+                        output_buffer.append(output_buffer[start_index + i])
 
                 num_flags = bitarray(bin(int(num_flags.to01(), 2) - 1)[2:].zfill(24))
 
