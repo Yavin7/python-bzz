@@ -11,8 +11,8 @@ class BZZCompressor:
 
         # read the input file
         try:
-            with open(f"{input_file_path}/{input_file}", "rb") as input_file:
-                data.fromfile(input_file)
+            with open(f"{input_file_path}/{input_file}", "rb") as infile:
+                data.fromfile(infile)
                 data = data.tobytes()
         except IOError:
             print("Could not open input file...")
@@ -163,20 +163,9 @@ class BZZCompressor:
         out_data = output_buffer
 
         try:
-            if "bin_extract" in input_file_path[0:11]:
-                output_file_path = input_file_path[12:]
-            else:
-                output_file_path = input_file_path
-
-            if "/" in output_file_path:
-                output_file_name = output_file_path.split("/")[-1] + ".file"
-            else:
-                output_file_name = output_file_path + ".file"
-
-            # TODO: Create file path, if it doesn't exist
-            with open(f"{output_folder}/{output_file_name}", "wb") as outfile:
+            with open(f"{output_folder}/{input_file}.file", "wb") as outfile:
                 outfile.write(out_data)
-                print(f"File {output_file_name} saved successfully!")
+                print(f"File {output_folder}/{input_file}.file saved successfully!")
         except IOError as e:
             print(
                 f"Unable to write file for {input_file_path}/{input_file}. Error: {e}"
@@ -195,7 +184,7 @@ if __name__ == "__main__":
                 output_folder_path.mkdir(parents=True, exist_ok=True)
 
                 try:
-                    compressor.decompress(dirpath, file, output_folder_path)
+                    compressor.decompress(dirpath, file, str(output_folder_path))
                 except Exception as e:
                     print(
                         f"Error while decompressing {output_folder_path}/{file}. Error: {e}"
