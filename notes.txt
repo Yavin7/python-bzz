@@ -1,10 +1,11 @@
 Conclusions based on the data below:
 1. It looks like the Part A is the file's type
 2. It looks like Part C - Part B is 1 more than the length of the 0-padding between files
-  note: I don't know why they didn't just write the file's size here, it would've saved on space
+  note: I don't know why they didn't just write the file compressed and decompressed sizes here, it would've saved on space and been more useful
 3. PS1 developers were madlads
 
 
+FILE: title/language.bzz
 Header:
 Header Data Start:  0x00
 Header Data End:    0x2F
