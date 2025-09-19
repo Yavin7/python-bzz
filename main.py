@@ -12,7 +12,7 @@ class BZZCompressor:
         # read the input file
         try:
             with open(f"{input_file_path}/{input_file}", "rb") as infile:
-                temp = bitarray(endian="big")
+                temp = bitarray(endian="little")
                 temp.fromfile(infile)
 
                 data = temp.tobytes()
@@ -30,13 +30,9 @@ class BZZCompressor:
         ##############################################################################
 
         # This is always 1, 0, 0, 0. so I'm just having fun
-        bzz_version = f"v{data[0]}.{data[1]}.{data[2]}.{data[3]}"
-        game_id = "".join([str(int(bin(item)[2:], 2)) for item in data[4:8]])
-
-        num_files = 0
-
-        for item in data[8:12]:
-            num_files += int(bin(item)[2:].zfill(8), 2)
+        bzz_version = int.from_bytes(data[0:4], "little")
+        game_id = int.from_bytes(data[4:8], "little")
+        num_files = int.from_bytes(data[8:12], "little")
 
         print(f"BZZ Version: {bzz_version}")
         print(f"Game ID: {game_id}")
@@ -48,9 +44,15 @@ class BZZCompressor:
             tmp = (i) * 12
             files.append(
                 {
-                    "pt_a": data[12 + tmp : 12 + tmp + 4],
-                    "pt_b": data[12 + tmp + 4 : 12 + tmp + 8],
-                    "pt_c": data[12 + tmp + 8 : 12 + tmp + 12],
+                    "pt_a": hex(
+                        int.from_bytes(data[12 + tmp : 12 + tmp + 4], "little")
+                    ),
+                    "pt_b": hex(
+                        int.from_bytes(data[12 + tmp + 4 : 12 + tmp + 8], "little")
+                    ),
+                    "pt_c": hex(
+                        int.from_bytes(data[12 + tmp + 8 : 12 + tmp + 12], "little")
+                    ),
                 }
             )
 

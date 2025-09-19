@@ -1,0 +1,50 @@
+Conclusions based on the data below:
+1. It looks like the Part A is the file's type
+2. It looks like Part C - Part B is 1 more than the length of the 0-padding between files
+  note: I don't know why they didn't just write the file's size here, it would've saved on space
+3. PS1 developers were madlads
+
+
+Header:
+Header Data Start:  0x00
+Header Data End:    0x2F
+0 Padding Start:    0x30
+0 Padding End:      0x7FB
+Checksum Start:     0x7FC
+Checksum End:       0x7FF
+
+File 1:
+Part A:             0x1
+Part B:             0x8fc
+Part C:             0x1000
+C - B = 0x704
+
+Data Start:         0x800
+Data End:           0x10F9
+0 Padding Start:    0x10FA
+0 Padding End:      0x17FF
+End - Start = 0x705
+
+File 2:
+Part A:             0x3
+Part B:             0xE240
+Part C:             0xE800
+C - B = 0x5C0
+
+Data Start:         0x1800
+Data End:           0xFA3F
+0 Padding Start:    0xFA40
+0 Padding End:      0xFFFF
+0 Padding End - Start = 0x5BF
+
+File 3:
+Part A:             0x4
+Part B:             0xD450
+Part C:             0xD800
+C - B = 0x3B0
+
+Data Start:         0x10000
+Data End:           0x1D44F
+0 Padding Start:    0x1D450
+0 Padding End:      0x1D7FF
+End - Start = 3AF
