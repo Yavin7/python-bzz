@@ -4,10 +4,13 @@ from pathlib import Path
 
 
 class BZZCompressor:
-    def decompress(self, input_file_path, input_file, output_folder="out/") -> bytes:
+    def decompress(
+        self, input_file_path, input_file, output_type="file", output_folder="out/"
+    ) -> bytes:
         data = bytes()
         output_buffer = bytearray()
         overflow_buffer = bytearray()
+        return_files = []
 
         # read the input file
         try:
@@ -214,38 +217,43 @@ class BZZCompressor:
             # I need to
             out_data = output_buffer
 
-            try:
-                with open(
-                    f"{output_folder}/{input_file}_{str(file_num).zfill(3)}.file{file['type'][2:]}",
-                    "wb",
-                ) as outfile:
-                    outfile.write(out_data)
-                    # print(
-                    #     f"File {output_folder}/{input_file}_{str(file_num).zfill(3)}.file{file['type'][2:]} saved successfully!"
-                    # )
-            except IOError as e:
-                raise IOError(
-                    f"Unable to write file for {input_file_path}/{input_file} on {file_num}/{len(files)}. Error: {e}"
-                )
+            if output_type == "file":
+                try:
+                    with open(
+                        f"{output_folder}/{input_file}_{str(file_num).zfill(3)}.file{file['type'][2:]}",
+                        "wb",
+                    ) as outfile:
+                        outfile.write(out_data)
+                        # print(
+                        #     f"File {output_folder}/{input_file}_{str(file_num).zfill(3)}.file{file['type'][2:]} saved successfully!"
+                        # )
+                except IOError as e:
+                    raise IOError(
+                        f"Unable to write file for {input_file_path}/{input_file} on {file_num}/{len(files)}. Error: {e}"
+                    )
+            elif output_type == "return":
+                return_files.append(out_data)
 
-        index = starting_index
+        if not skip_overflow and output_type == "file":
+            index = starting_index
 
-        skip_overflow = True
+            skip_overflow = True
 
-        if len(data) > index:
-            for item in data[index:]:
-                overflow_buffer.append(item)
+            if len(data) > index:
+                for item in data[index:]:
+                    overflow_buffer.append(item)
 
-        for item in overflow_buffer:
-            if item != 0x00:
-                skip_overflow = False
+            for item in overflow_buffer:
+                if item != 0x00:
+                    skip_overflow = False
 
-        if not skip_overflow:
             with open(f"{output_folder}/{input_file}.overflow.file", "wb") as outfile:
                 outfile.write(overflow_buffer)
                 print(
                     f"File {output_folder}/{input_file}.overflow.file saved successfully!"
                 )
+        elif output_type == "return":
+            return return_files
 
 
 if __name__ == "__main__":
