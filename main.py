@@ -17,7 +17,7 @@ class BZZCompressor:
 
                 data = temp.tobytes()
         except IOError:
-            print("Could not open input file...")
+            print("Could not open {input_file_path}/{input_file}...")
             raise
 
         ##############################################################################
@@ -34,9 +34,9 @@ class BZZCompressor:
         game_id = int.from_bytes(data[4:8], "little")
         num_files = int.from_bytes(data[8:12], "little")
 
-        print(f"BZZ Version: {bzz_version}")
-        print(f"Game ID: {game_id}")
-        print(f"Number of Files: {num_files}")
+        # print(f"BZZ Version: {bzz_version}")
+        # print(f"Game ID: {game_id}")
+        # print(f"Number of Files: {num_files}")
 
         files = []
 
@@ -56,11 +56,8 @@ class BZZCompressor:
                 }
             )
 
-        for i, file in enumerate(files):
-            print(f"File {i+1}'s Data: {file}")
-
         checksum = data[0x7FC:0x800]
-        print(f"Checksum: {checksum}")
+        # print(f"Checksum: {checksum}")
 
         ##############################################################################
         #
@@ -72,7 +69,7 @@ class BZZCompressor:
 
         # File Loop
         for file_num, file in enumerate(files):
-            print(hex(starting_index))
+            # print(hex(starting_index))
 
             index = starting_index
 
@@ -80,7 +77,7 @@ class BZZCompressor:
             file_end = starting_index + int(file.get("file_end")[2:], 16)
             starting_index = starting_index + int(file.get("padding_end")[2:], 16)
 
-            print(hex(file_end))
+            # print(hex(file_end))
 
             # Getting our method, this is likely imprecise, since I'm one dealing with one
             # method type, but it gets what I want
@@ -120,13 +117,13 @@ class BZZCompressor:
             num_flags = int.from_bytes(data[index : index + 3], "big") + 1
             index = index + 3
 
-            print(f"Method: {hex(method)}")
-            print(f"Shifter: {shifter}")
-            print(f"Len Bits: {bin(len_bits)}")
-            print(f"Len Mask: {bin(len_mask)}")
-            print(f"Threshold: {threshold}")
-            print(f"Len Table: {len_table}")
-            print(f"Loops (based on num flags): {num_flags}")
+            # print(f"Method: {hex(method)}")
+            # print(f"Shifter: {shifter}")
+            # print(f"Len Bits: {bin(len_bits)}")
+            # print(f"Len Mask: {bin(len_mask)}")
+            # print(f"Threshold: {threshold}")
+            # print(f"Len Table: {len_table}")
+            # print(f"Loops (based on num flags): {num_flags}")
 
             # Adding 0x100 here means the bitarray is a length of 9, and the first item is always 1
             # This means that later, when we need to gather more flag bits, we aren't losing any data, or
@@ -153,7 +150,7 @@ class BZZCompressor:
                     except IndexError:
                         print(output_buffer)
                         print(
-                            f"Error processing file. Reached of data stream early. Index: {index}"
+                            f"Error processing {input_file_path}/{input_file} on {file_num}/{len(files)}. Reached of data stream early. Index: {index}"
                         )
                         return
 
@@ -161,15 +158,13 @@ class BZZCompressor:
                 else:
                     # This shouldn't happen
                     if len(data) <= index + 1:
-                        print("Error processing file. Reached of data stream early.")
+                        print(
+                            "Error processing {input_file_path}/{input_file} on {file_num}/{len(files)}. Reached of data stream early."
+                        )
                         return
 
-                    # This is "temp" in our documentation
-                    temp = ""
-                    for item in data[index : index + 2]:
-                        temp = temp + bin(item)[2:].zfill(8)
-
-                    distance_data = int(temp, 2)
+                    # The "temp" in our documentation
+                    distance_data = int.from_bytes(data[index : index + 2], "big")
                     index = index + 2
 
                     # length here is the length of the data we are copying.
@@ -183,8 +178,8 @@ class BZZCompressor:
                     # This shouldn't happen
                     if displacement <= 0:
                         print(
-                            f"Error processing file. Displacement was less than or equal to 0.\n"
-                            + f"Distance Data: {distance_data}. Displacement: {displacement}. Index: {hex(index)}"
+                            f"Error processing {input_file_path}/{input_file} on {file_num}/{len(files)}. Displacement was less than or equal to 0.\n"
+                            + f"Displacement: {displacement}. Distance Data: {distance_data}. Length Bits: {len_bits}"
                         )
                         return
 
@@ -201,8 +196,9 @@ class BZZCompressor:
                     # If start index is less than 0, we'll be checking something like output_buffer[-2]
                     # or smth, which will have an IndexOutOfBounds exception
                     if copy_index < 0:
-                        print(output_buffer)
-                        print("Error decompressing file. Start Index was out of range.")
+                        print(
+                            "Error decompressing {input_file_path}/{input_file} on {file_num}/{len(files)}. Start Index was out of range."
+                        )
                         return
 
                     for i in range(length):
@@ -219,12 +215,12 @@ class BZZCompressor:
                     "wb",
                 ) as outfile:
                     outfile.write(out_data)
-                    print(
-                        f"File {output_folder}/{input_file}_{str(file_num).zfill(3)}.file{file['type'][2:]} saved successfully!"
-                    )
+                    # print(
+                    #     f"File {output_folder}/{input_file}_{str(file_num).zfill(3)}.file{file['type'][2:]} saved successfully!"
+                    # )
             except IOError as e:
                 print(
-                    f"Unable to write file for {input_file_path}/{input_file}. Error: {e}"
+                    f"Unable to write file for {input_file_path}/{input_file} on {file_num}/{len(files)}. Error: {e}"
                 )
 
         index = starting_index
@@ -251,10 +247,8 @@ if __name__ == "__main__":
     compressor = BZZCompressor()
 
     for dirpath, dirnames, filenames in os.walk("./bin_extract"):
-        print(f"{dirpath} | {', '.join(filenames)}")
-
         for file in filenames:
-            if file[-4:] == ".bzz" and file == "language.bzz":
+            if ".bzz" in file[4:]:
                 output_folder_path = Path(f"out/{'/'.join(dirpath.split("/")[2:])}")
                 output_folder_path.mkdir(parents=True, exist_ok=True)
 
