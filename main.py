@@ -117,7 +117,7 @@ class BZZCompressor:
             for item in data[index : index + 3]:
                 temp_flags += bin(item)[2:].zfill(8)
 
-            num_flags = int(temp_flags, 2) + 1
+            num_flags = int.from_bytes(data[index : index + 3], "big") + 1
             index = index + 3
 
             print(f"Method: {hex(method)}")
@@ -210,10 +210,6 @@ class BZZCompressor:
 
                 num_flags = num_flags - 1
 
-            if len(data) > index:
-                for item in data[index:]:
-                    overflow_buffer.append(item)
-
             # This handoff is so I can change buffer logic without breaking write-out logic
             out_data = output_buffer
 
@@ -226,17 +222,28 @@ class BZZCompressor:
                     print(
                         f"File {output_folder}/{input_file}_{str(file_num).zfill(3)}.file{file['type'][2:]} saved successfully!"
                     )
-
-                with open(
-                    f"{output_folder}/{input_file}.overflow.file", "wb"
-                ) as outfile:
-                    outfile.write(overflow_buffer)
-                    print(
-                        f"File {output_folder}/{input_file}.overflow.file saved successfully!"
-                    )
             except IOError as e:
                 print(
                     f"Unable to write file for {input_file_path}/{input_file}. Error: {e}"
+                )
+
+        index = starting_index
+
+        skip_overflow = True
+
+        if len(data) > index:
+            for item in data[index:]:
+                overflow_buffer.append(item)
+
+        for item in overflow_buffer:
+            if item != 0x00:
+                skip_overflow = False
+
+        if not skip_overflow:
+            with open(f"{output_folder}/{input_file}.overflow.file", "wb") as outfile:
+                outfile.write(overflow_buffer)
+                print(
+                    f"File {output_folder}/{input_file}.overflow.file saved successfully!"
                 )
 
 
