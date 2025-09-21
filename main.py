@@ -232,9 +232,14 @@ class BZZCompressor:
                         f"Unable to write file for {input_file_path}/{input_file} on {file_num}/{len(files)}. Error: {e}"
                     )
             elif output_type == "return":
-                return_files.append(out_data)
+                return_files.append(
+                    {
+                        type: file["type"],
+                        data: out_data,
+                    }
+                )
 
-        if not skip_overflow and output_type == "file":
+        if output_type == "file":
             index = starting_index
 
             skip_overflow = True
@@ -247,11 +252,14 @@ class BZZCompressor:
                 if item != 0x00:
                     skip_overflow = False
 
-            with open(f"{output_folder}/{input_file}.overflow.file", "wb") as outfile:
-                outfile.write(overflow_buffer)
-                print(
-                    f"File {output_folder}/{input_file}.overflow.file saved successfully!"
-                )
+            if not skip_overflow:
+                with open(
+                    f"{output_folder}/{input_file}.overflow.file", "wb"
+                ) as outfile:
+                    outfile.write(overflow_buffer)
+                    print(
+                        f"File {output_folder}/{input_file}.overflow.file saved successfully!"
+                    )
         elif output_type == "return":
             return return_files
 
