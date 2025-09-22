@@ -130,21 +130,17 @@ class BZZCompressor:
             # hitting an index out of bounds error
             flag_bits = data[index] + 0x100
             index = index + 1
-            # used to track how far in flag_bits we are
-            counter = 8
 
             try:
                 while num_flags > 0:
                     carry = bin(flag_bits)[-1]
                     flag_bits = flag_bits >> 1
-                    counter = counter - 1
 
                     # if we are down to only 0 bits, we are out of file-driven data
                     # Here we collect more flag bits and re-iterate the loop
-                    if counter == 0:
+                    if flag_bits == 1:
                         flag_bits = data[index] + 0x100
                         index = index + 1
-                        counter = 8
                         continue
 
                     # Carry means the next byte is raw data, no weird placement or indexing
