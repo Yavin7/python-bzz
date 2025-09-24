@@ -5,11 +5,9 @@ from pathlib import Path
 
 class BZZCompressor:
     def decompress(
-        self, input_file_path, input_file, output_type="file", output_folder="out/"
+        self, input_file_path, input_file, output_file=False, output_folder_path="out/"
     ) -> bytes:
         data = bytes()
-        output_buffer = bytearray()
-        overflow_buffer = bytearray()
         return_files = []
 
         # read the input file
@@ -70,12 +68,15 @@ class BZZCompressor:
         starting_index = 0x800
 
         # File Loop
-        for file_num, file in enumerate(files):
+        for file_i, file in enumerate(files):
+            file_num = file_i + 1
             index = starting_index
+
+            output_buffer = bytearray()
+            overflow_buffer = bytearray()
 
             # Prepping for the next loop
             file_end = starting_index + int(file.get("file_end")[2:], 16)
-            starting_index = starting_index + int(file.get("padding_end")[2:], 16)
 
             # print(hex(file_end))
 
@@ -94,7 +95,7 @@ class BZZCompressor:
             len_bits = (method & 0x07) ^ 0x07
 
             # The bin() function only returns the second half of the byte, so we pad the byte
-            len_mask = 1 << len_bits
+            len_mask = (1 << len_bits) - 1
 
             threshold = len_mask >> 1
 
@@ -109,26 +110,30 @@ class BZZCompressor:
                 else:
                     len_table.append(i + 3)
 
-            temp_flags = ""
-
-            for item in data[index : index + 3]:
-                temp_flags += bin(item)[2:].zfill(8)
-
             num_flags = int.from_bytes(data[index : index + 3], "big") + 1
             index = index + 3
 
             # print(f"Method: {hex(method)}")
             # print(f"Shifter: {shifter}")
-            # print(f"Len Bits: {bin(len_bits)}")
-            # print(f"Len Mask: {bin(len_mask)}")
-            # print(f"Threshold: {threshold}")
+            # print(f"Len Bits: {hex(len_bits)}")
+            # print(f"Len Mask: {hex(len_mask)}")
+            # print(f"Threshold: {hex(threshold)}")
             # print(f"Len Table: {len_table}")
             # print(f"Loops (based on num flags): {num_flags}")
 
             # Adding 0x100 here means the bitarray is a length of 9, and the first item is always 1
             # This means that later, when we need to gather more flag bits, we aren't losing any data, or
             # hitting an index out of bounds error
-            flag_bits = data[index] + 0x100
+            try:
+                flag_bits = data[index] + 0x100
+            except Exception as e:
+                raise IndexError(
+                    f"Error decompressing {input_file_path}/{input_file} on {file_num}/{len(files)}. flag_bits Index was out of range.\n"
+                    + f"Buffer Length: {len(output_buffer)}. File Start: {hex(starting_index)}. File End: {hex(file_end)}. "
+                    + f"\nLoops left: {num_flags}"
+                    + f"\nRemaining Data: {data[index-1:index+15]}"
+                )
+
             index = index + 1
 
             try:
@@ -138,30 +143,42 @@ class BZZCompressor:
 
                     # if we are down to only 0 bits, we are out of file-driven data
                     # Here we collect more flag bits and re-iterate the loop
-                    if flag_bits == 1:
-                        flag_bits = data[index] + 0x100
-                        index = index + 1
-                        continue
+                    try:
+                        if flag_bits == 0:
+                            flag_bits = data[index] + 0x100
+                            index = index + 1
+                            continue
+                    except Exception as e:
+                        raise IndexError(
+                            f"Error decompressing {input_file_path}/{input_file} on {file_num}/{len(files)}. flag_bits Index was out of range.\n"
+                            + f"Buffer Length: {len(output_buffer)}. File Start: {hex(starting_index)}. File End: {hex(file_end)}. "
+                            + f"\nLoops left: {num_flags}"
+                            + f"\nRemaining Data: {data[index-1:index+15]}"
+                        )
 
                     # Carry means the next byte is raw data, no weird placement or indexing
-                    if carry:
+                    if carry == "1":
                         try:
                             output_buffer.append(data[index])
                             index = index + 1
                         except IndexError:
                             raise IndexError(
                                 f"Error processing {input_file_path}/{input_file} on {file_num}/{len(files)} (Carry Path). Reached of data stream early. Index: {index}\n"
-                                + f"Index: {hex(index)}. File Start: {hex(starting_index - int(file.get("padding_end")[2:], 16))}. File End: {hex(file_end)}"
+                                + f"Index: {hex(index)}. File Start: {hex(starting_index)}. File End: {hex(file_end)}"
+                                + f"\nLoops left: {num_flags}"
                             )
 
                     # If Carry is 0, then we are doing actual decompression. This is the tricky part
-                    else:
-                        # This shouldn't happen
+                    else:  # This shouldn't happen
                         if file_end <= index + 1:
-                            raise IndexError(
-                                f"Error processing {input_file_path}/{input_file} on {file_num}/{len(files)} (Non-Carry Path). Reached of data stream early.\n"
-                                + f"Index: {hex(copy_index)}. File Start: {hex(starting_index - int(file.get("padding_end")[2:], 16))}. File End: {hex(file_end)}"
-                            )
+                            if num_flags == 1:
+                                break
+                            else:
+                                raise IndexError(
+                                    f"Error processing {input_file_path}/{input_file} on {file_num}/{len(files)} (Non-Carry Path). Reached of data stream early.\n"
+                                    + f"Index: {hex(copy_index)}. File Start: {hex(starting_index)}. File End: {hex(file_end)}"
+                                    + f"\nLoops left: {num_flags}"
+                                )
 
                         # The "temp" in our documentation
                         distance_data = int.from_bytes(data[index : index + 2], "big")
@@ -169,7 +186,20 @@ class BZZCompressor:
 
                         # length here is the length of the data we are copying.
                         # We multiply by 8 since we are working with bits instead of bytes
-                        length = len_table[(distance_data & len_mask) - 1]
+                        num_25_check = False
+
+                        try:
+                            length = len_table[(distance_data & len_mask)]
+                        except Exception as e:
+                            if (distance_data & len_mask) == 15:
+                                num_25_check = True
+                                length = 26
+                            else:
+                                raise IndexError(
+                                    f"Distant Data ({bin(distance_data)}) & Length Mask ({bin(len_mask)}) (which is {distance_data & len_mask}) is outside of the Length Table index range."
+                                    + f"\nLoops left: {num_flags}."
+                                    + f"\nRemaining Data: {data[index-1:index+15]}"
+                                )
 
                         # Displacement is how far back in the existing output_buffer we are
                         # looking to copy from. We multiply by 8 since we are working with bits and not bytes
@@ -177,57 +207,81 @@ class BZZCompressor:
 
                         # This shouldn't happen
                         if displacement <= 0:
-                            raise ValueError(
-                                f"Error processing {input_file_path}/{input_file} on {file_num}/{len(files)}. Displacement was less than or equal to 0.\n"
-                                + f"Displacement: {displacement}. Distance Data: {distance_data}. Length Bits: {len_bits}"
-                            )
+                            if num_25_check:
+                                index = index - 2
+                                continue
+                            else:
+                                raise ValueError(
+                                    f"Error processing {input_file_path}/{input_file} on {file_num}/{len(files)}. Displacement was less than or equal to 0.\n"
+                                    + f"Displacement: {displacement}. Distance Data: {distance_data}. Length Bits: {len_bits}. Length: {length}."
+                                )
+
+                        # Here we copy bit by bit from earlier in the output buffer.
+                        # we use this instead of index slicing since the slice could lead to
+                        # data we are currently copying into the buffer
+
+                        copy_index = len(output_buffer) - displacement + 1
 
                         # print(f"Output Buffer Size {len(output_buffer)}")
                         # print(f"Distance Data: {distance_data}")
                         # print(f"Displacement: {displacement}")
                         # print(f"Length: {length}")
-
-                        # Here we copy bit by bit from earlier in the output buffer.
-                        # we use this instead of index slicing since the slice could lead to
-                        # data we are currently copying into the buffer
-                        copy_index = len(output_buffer) - displacement
+                        # print(f"Copy Index: {copy_index}")
 
                         # If start index is less than 0, we'll be checking something like output_buffer[-2]
                         # or smth, which will have an IndexOutOfBounds exception
                         if copy_index < 0:
-                            raise IndexError(
-                                f"Error decompressing {input_file_path}/{input_file} on {file_num}/{len(files)}. Displacement Index was out of range.\n"
-                                + f"Displacement Index: {hex(copy_index)}. File Start: {hex(starting_index - int(file.get("padding_end")[2:], 16))}. File End: {hex(file_end)}"
-                            )
+                            if num_25_check:
+                                index = index - 2
+                                continue
+                            else:
+                                raise IndexError(
+                                    f"Error decompressing {input_file_path}/{input_file} on {file_num}/{len(files)}. Displacement Index was out of range.\n"
+                                    + f"Copy Index: {hex(copy_index)}. Displacement: {displacement}. Buffer Length: {hex(len(output_buffer))}. "
+                                    + f"Distance Data: {distance_data} {bin(distance_data)}. File Start: {hex(starting_index)}. File End: {hex(file_end)}. "
+                                    + f"\nLoops left: {num_flags}. Index: {hex(index)}"
+                                    + f"\nRemaining Data: {data[index-1:index+15]}"
+                                )
 
-                        for i in range(length):
-                            output_buffer.append(output_buffer[copy_index + i])
+                        try:
+                            for i in range(length):
+                                output_buffer.append(output_buffer[copy_index + i - 1])
+                        except Exception as e:
+                            if num_25_check:
+                                index = index - 2
+                                continue
+                            else:
+                                raise IndexError(
+                                    f"Error decompressing {input_file_path}/{input_file} on {file_num}/{len(files)}. Index was out of data range.\n"
+                                    + f"Copy Index: {hex(copy_index)}. Displacement: {displacement}. Buffer Length: {hex(len(output_buffer))}. "
+                                    + f"Distance Data: {distance_data}. File Start: {hex(starting_index)}. File End: {hex(file_end)}. "
+                                    + f"\nLoops left: {num_flags}"
+                                    + f"\nRemaining Data: {data[index-1:index+15]}"
+                                )
 
                     num_flags = num_flags - 1
             except Exception as e:
                 print(
-                    f"\nError while processing {input_file_path}/{input_file}_{hex(file_num)[2:].zfill(3)}. \nError: {e}"
+                    f"\nError while processing {input_file_path}/{input_file[:-4]}_{hex(file_num)[2:].zfill(3)}. \nError: {e}"
                 )
 
+            starting_index = starting_index + int(file.get("padding_end")[2:], 16)
+
             # This handoff is so I can change buffer logic without breaking write-out logic.
-            # I need to
             out_data = output_buffer
 
-            if output_type == "file":
+            if output_file:
                 try:
                     with open(
-                        f"{output_folder}/{input_file}_{str(file_num).zfill(3)}.file{file['type'][2:]}",
+                        f"{output_folder_path}/{input_file}_{str(file_num).zfill(3)}.file{file['type'][2:]}",
                         "wb",
                     ) as outfile:
                         outfile.write(out_data)
-                        # print(
-                        #     f"File {output_folder}/{input_file}_{str(file_num).zfill(3)}.file{file['type'][2:]} saved successfully!"
-                        # )
                 except IOError as e:
                     raise IOError(
                         f"Unable to write file for {input_file_path}/{input_file} on {file_num}/{len(files)}. Error: {e}"
                     )
-            elif output_type == "return":
+            else:
                 return_files.append(
                     {
                         type: file["type"],
@@ -235,7 +289,7 @@ class BZZCompressor:
                     }
                 )
 
-        if output_type == "file":
+        if output_file:
             index = starting_index
 
             skip_overflow = True
@@ -250,13 +304,13 @@ class BZZCompressor:
 
             if not skip_overflow:
                 with open(
-                    f"{output_folder}/{input_file}.overflow.file", "wb"
+                    f"{output_folder_path}/{input_file}.overflow.file", "wb"
                 ) as outfile:
                     outfile.write(overflow_buffer)
                     print(
-                        f"File {output_folder}/{input_file}.overflow.file saved successfully!"
+                        f"File {output_folder_path}/{input_file}.overflow.file saved successfully!"
                     )
-        elif output_type == "return":
+        else:
             return return_files
 
 
@@ -270,7 +324,7 @@ if __name__ == "__main__":
                 output_folder_path.mkdir(parents=True, exist_ok=True)
 
                 try:
-                    compressor.decompress(dirpath, file, str(output_folder_path))
+                    compressor.decompress(dirpath, file, True, output_folder_path)
                 except Exception as e:
                     print(
                         f"\nError while decompressing {output_folder_path}/{file}. \nError: {e}"

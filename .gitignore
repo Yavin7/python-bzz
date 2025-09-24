@@ -1,6 +1,7 @@
 # Project Specific
 bin_extract/*
 out/*
+documentation_website/*
 bzz_mudule.py
 
 # Byte-compiled / optimized / DLL files
